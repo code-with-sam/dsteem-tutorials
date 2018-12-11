@@ -1,0 +1,58 @@
+<html>
+    <head>
+    <script src="https://unpkg.com/dsteem@0.10.0/dist/dsteem.js"></script>
+    <script>
+      const client = new dsteem.Client('https://api.steemit.com');
+      const POSTING_KEY = dsteem.PrivateKey.fromString('')
+      const USERNAME = 'steemversary'
+      const AUTO_VOTE_LIST = ['sambillingham', 'codewithsam', 'finallynetwork']
+
+      const stream = client.blockchain.getBlockStream();
+      stream.on('data', (block) => processBlock(block))
+
+      function processBlock(block) {
+        // Each block contains multiple transactions
+        block.transactions
+            // create a new list of transactions that only include a specific type of operation
+           .filter( tx => filterTransaction(tx, 'comment') )
+            // Check the data of each opperation e.g - author
+           .forEach( tx => processPost( transactionData(tx) ))
+      }
+
+      // Helper for checking operation Type
+      function filterTransaction(tx, operationType){
+        return tx.operations[0][0] === operationType
+      }
+
+      // Helper for nested transaction Data
+      function transactionData(tx){
+        return tx.operations[0][1]
+      }
+
+      // Helper for checking vote list
+      function isAutoVote(name){
+        return (AUTO_VOTE_LIST.indexOf(name) > -1);
+      }
+
+      // Process Post against any rules and send response
+      function processPost(txData){
+        if ( isAutoVote(txData.author) ) sendVote(txData.author, txData.permlink)
+      }
+
+      // Broadcast vote using DSteem
+      function sendVote(author, permlink) {
+        client.broadcast.vote({
+            voter: USERNAME,
+            author: author,
+            permlink: permlink,
+            weight: 10000
+        }, POSTING_KEY)
+        .then( (result) => {
+           console.log(`AUTOVOTE FOR ${author}:${permlink}`)
+           console.log(result)
+        })  
+      }
+     </script>
+    </head>
+    <body></body>
+</html>
