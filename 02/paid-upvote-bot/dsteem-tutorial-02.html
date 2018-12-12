@@ -1,0 +1,85 @@
+<html>
+    <head>
+    <script src="https://unpkg.com/dsteem@0.10.0/dist/dsteem.js"></script>
+        <script>
+          const client = new dsteem.Client('https://api.steemit.com');
+          const POSTING_KEY = dsteem.PrivateKey.fromString('') // add private posting key 
+          const USERNAME = '' // add username 
+
+          const stream = client.blockchain.getBlockStream();
+          stream.on('data', (block) => processBlock(block))
+
+          function processBlock(block) {
+            // Each block contains multiple transactions
+            block.transactions
+                // create a new list of transactions that only include a specific type of operation
+               .filter( tx => filterTransaction(tx, 'transfer') )
+                // Check the data of each opperation e.g - author
+               .forEach( tx => processTransaction( transactionData(tx) ))
+          }
+
+          // Helper for checking operation Type
+          function filterTransaction(tx, operationType){
+            return tx.operations[0][0] === operationType
+          }
+
+          // Helper for nested transaction Data
+          function transactionData(tx){
+            return tx.operations[0][1]
+          }
+
+          // Process Post against any rules and send response
+          function processTransaction(txData){
+            // {from: "username", to: "username", amount: "0.000 STEEM", memo: "...."}
+            if(txData.to === USERNAME) {
+               let voteWeight = calcVoteWeight(txData.amount)
+               let permlink = permlinkFromMemo(txData.memo)
+               sendVote(txData.from, permlink, voteWeight)
+            }
+          }
+
+          // Calculate the voting weight of our service
+          // A full vote cost 5SBD - we calculate the users vote% based on this value
+          function calcVoteWeight(amountPaid) {
+            let transfer = amountPaid.split(' ')
+            let tokenType = transfer[1]
+            let tokenValue = transfer[0]
+            let steemToSbdRatio = 0.4
+            let fullVoteCost = 0.1
+            let weight;
+
+            if (tokenValue >= fullVoteCost) {
+              weight = 100
+            } else {
+              weight = (tokenValue/fullVoteCost) * 100
+            }
+
+            if( tokenType == 'STEEM') {
+              return (weight * steemToSbdRatio) * 100
+            } else {
+              return weight * 100
+            }
+          }
+
+          // get the permlink part of a url from memo
+          function permlinkFromMemo(memo){
+            return memo.split('/').pop()
+          }
+
+          // Broadcast vote using DSteem
+          function sendVote(author, permlink, weight) {
+            client.broadcast.vote({
+                voter: USERNAME,
+                author: author,
+                permlink: permlink,
+                weight: weight
+            }, POSTING_KEY)
+            .then( (result) => {
+               console.log(`${author} Paid for a ${weight/100}% vote on ${permlink}`)
+               console.log(result)
+            })  
+          }
+				</script>
+    </head>
+    <body></body>
+</html>
